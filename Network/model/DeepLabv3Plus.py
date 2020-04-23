@@ -276,3 +276,5 @@ def DeepLabV3Plus(x, input_shape, keep_prob, num_classess, backbone='mobilenetv2
 
     # Ensure that the model takes into account
     # any potential predecessors of 'input_tensor'
+
+    return outputs

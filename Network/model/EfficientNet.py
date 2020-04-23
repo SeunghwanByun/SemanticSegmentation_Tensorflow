@@ -51,9 +51,6 @@ KEEP_PROB = 0.8
 MAX_ITERATION = 1e-2
 NUM_OF_CLASSESS = 2
 IMAGE_SHAPE_KITTI = (160, 576)
-# IMAGE_SHAPE_KITTI = (192, 704)
-# IMAGE_SHAPE_KITTI = (384, 1280)
-# IMAGE_SHAPE_KITTI = (713, 1280)
 BATCH_SIZE = 1
 EPOCHS = 50
 # EPOCHS = 1
@@ -185,17 +182,15 @@ def MBConvBlock(inputs, block_args, activation, drop_rate=None, prefix='', ):
     if has_se:
         num_reduced_filters = max(1, int(block_args.input_filters * block_args.se_ratio))
         se_tensor = Global_Avg_Pool(x, name=prefix + 'se_squeeze')
-        # print("se_tensor.shape:", se_tensor.shape)
+
         target_shape = (1, 1, filters, 8)
+        
         se_tensor = tf.expand_dims(se_tensor, dim=1)
         se_tensor = tf.expand_dims(se_tensor, dim=1)
-        # se_tensor = tf.reshape(se_tensor, target_shape, name=prefix+'se_reshape')
         se_tensor = Conv2D_Block(se_tensor, num_reduced_filters, filter_height=1, filter_width=1, stride=1,
                                  padding='SAME', activation=activation, name=prefix + 'se_reduce')
         se_tensor = Conv2D_Block(se_tensor, filters, filter_height=1, filter_width=1, padding='SAME',
                                  activation='sigmoid', name=prefix + 'se_expand')
-        # print("se_tensor.shape", se_tensor.shape)
-        # print("x.shape", x.shape)
         x = tf.math.multiply(x, se_tensor, name=prefix + 'se_excite')
 
         # 약간 좀 다른 부분이 있음.
@@ -215,22 +210,6 @@ def MBConvBlock(inputs, block_args, activation, drop_rate=None, prefix='', ):
     return x
 
 
-# def EfficientNet(inputs,
-#                  width_coefficient,
-#                  depth_coefficient,
-#                  default_resolution,
-#                  dropout_rate=0.2,
-#                  drop_connect_rate=0.2,
-#                  depth_divisor=8,
-#                  blocks_args=DEFAULT_BLOCK_ARGS,
-#                  model_name='efficientnet',
-#                  include_top=True,
-#                  weights='imagenet',
-#                  input_tensor=None,
-#                  input_shape=None,
-#                  pooling=None,
-#                  classes=2,
-#                  **kwargs):
 def EfficientNet(inputs,
                  keep_prob,
                  width_coefficient,
@@ -250,23 +229,12 @@ def EfficientNet(inputs,
     :param inputs:
     :param width_coefficient: float, scaling coefficient for network width.
     :param depth_coefficient: float, scaling coefficientnet for network depth.
-    :param default_resolution: int, default input image size.
     :param dropout_rate: float, dropout rate before final classifier layer.
     :param drop_connect_rate: float, drouput rate at skip connections.
     :param depth_divisor: int.
     :param block_args: A list of BlockArgs to construct block modules.
-    :param model_name: string, model_name.
     :param include_top: whether to include the fully-connected
                 layers at the top of the network.
-    :param weights: one of 'None' (random initialization),
-                'imagenet' (pre-training on ImageNet),
-                or the path to the weights file to be loaded.
-    :param input_tensor: optional Keras tensor
-                (i.e. output of 'layers.Input()')
-                to use as image input for the model.
-    :param input_shape:optional shape tuple, only to be specified
-                if 'include_top' is False.
-                It should have exactly 3 inputs channels.
     :param pooling: optional pooling mode for feature extraction
                 when 'include_top' is 'False'.
                 - 'None' means that the output of the model will be
@@ -275,7 +243,7 @@ def EfficientNet(inputs,
                 applied to the output of the last convolutional layer, and thus
                 the output of the model will be a 2D tensor.
                 - 'max' means that global max pooling wil be applied.
-    :param classess: optional number of classess to classify images into, only to be specified if 'include_top'
+    :param classes: optional number of classess to classify images into, only to be specified if 'include_top'
                 is True, and if no 'weights' argument is specified.
     :param kwargs:
     :return: model
@@ -327,17 +295,6 @@ def EfficientNet(inputs,
     x = Conv2D_Block(x, round_filters(1280, width_coefficient, depth_divisor), filter_height=1, filter_width=1, padding='SAME', name='top_conv')
     x = Batch_Normalization(x, axis=bn_axis, name='top_bn')
     # x = tf.nn.swish(x, name='top_activation')
-
-    # if include_top:
-    #     x = Global_Avg_Pool(x, name='top')
-    #     if dropout_rate and dropout_rate > 0:
-    #         x = tf.nn.dropout(x, keep_prob, name='top_dropout')
-    #     x = tf.layers.dense(x, classes, activation=tf.nn.softmax, name='probs')
-    # else:
-    #     if pooling == 'avg':
-    #         x = Global_Avg_Pool(x, name='encoder_last_pooling_avg')
-    #     elif pooling == 'max':
-    #         x = Global_Max_Pool(x, name='encoder_last_pooling_max')
 
     return x
 

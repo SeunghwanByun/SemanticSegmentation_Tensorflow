@@ -14,10 +14,6 @@ KEEP_PROB = 0.1
 MAX_ITERATION = 1e-2
 NUM_OF_CLASSESS = 2
 IMAGE_SHAPE_KITTI = (128, 480)
-# IMAGE_SHAPE_KITTI = (160, 576)
-# IMAGE_SHAPE_KITTI = (192, 704)
-# IMAGE_SHAPE_KITTI = (384, 1280)
-# IMAGE_SHAPE_KITTI = (713, 1280)
 BATCH_SIZE = 1
 EPOCHS = 300
 LEARNING_RATE = 1e-4
@@ -212,18 +208,13 @@ def DeepLabV3Plus(x, input_shape, keep_prob, num_classess, backbone='mobilenetv2
 
 
         extracted_feature = _inverted_res_block(x, filters=320, alpha=alpha, stride=1, rate=4, expansion=6, block_id=16, skip_connection=False)
-
-
     # end of feature extractor
 
     # branching for Atrous Spatia Pyramid Pooling
-
     # Image Featrue branch
     b4 = Global_Avg_Pool(extracted_feature, name='b4')
 
     # from (b_size, channels)->(b_size, 1, 1, channels)
-    # b4 = Lambda(tf.expand_dims(x, dim=1))(b4)
-    # b4 = Lambda(tf.expand_dims(x, dim=1))(b4)
     b4 = tf.expand_dims(b4, dim=1)
     b4 = tf.expand_dims(b4, dim=1)
 
@@ -234,18 +225,18 @@ def DeepLabV3Plus(x, input_shape, keep_prob, num_classess, backbone='mobilenetv2
     b4 = Resize_Bilinear(b4, size_before[1:3], name='Upsampling')
 
     # simple 1x1
-    b0 = Conv2D_Block(x, 256, filter_height=1, filter_width=1, stride=1, padding='SAME', batch_normalization=True, relu=True, name='aspp0')
+    b0 = Conv2D_Block(extracted_feature, 256, filter_height=1, filter_width=1, stride=1, padding='SAME', batch_normalization=True, relu=True, name='aspp0')
 
     # there are only 2 branches in mobilenetV2. not sure why
     if backbone == 'xception':
         # rate = 6 (12)
-        b1 = SepConv_BN(x, 256, 'aspp1', rate=atrous_rate[0], depth_activation=True, epsilon=1e-5)
+        b1 = SepConv_BN(extracted_feature, 256, 'aspp1', rate=atrous_rate[0], depth_activation=True, epsilon=1e-5)
 
         # rate = 12 (24)
-        b2 = SepConv_BN(x, 256, 'aspp2', rate=atrous_rate[1], depth_activation=True, epsilon=1e-5)
+        b2 = SepConv_BN(extracted_feature, 256, 'aspp2', rate=atrous_rate[1], depth_activation=True, epsilon=1e-5)
 
         # rate = 18 (36)
-        b3 = SepConv_BN(x, 256, 'aspp3', rate=atrous_rate[2], depth_activation=True, epsilon=1e-5)
+        b3 = SepConv_BN(extracted_feature, 256, 'aspp3', rate=atrous_rate[2], depth_activation=True, epsilon=1e-5)
 
         # concatenate ASPP branches & project
         concatenated = Concat([b4, b0, b1, b2, b3], axis=-1, name="concatenation")
@@ -261,7 +252,7 @@ def DeepLabV3Plus(x, input_shape, keep_prob, num_classess, backbone='mobilenetv2
     if backbone == 'xception':
         # Feature projection
         # x4 (x2) block
-        size_before2 = tf.shape(reduce_channels)
+        size_before2 = tf.shape(xblock_entry_1)
         dec_up1 = Resize_Bilinear(reduce_channels, size_before2[1:3], name="Upsampling2")
 
         dec_skip1 = Conv2D_Block(skip1, 48, filter_height=1, filter_width=1, stride=1, padding='SAME', batch_normalization=True, relu=True, name="feature_projection0")

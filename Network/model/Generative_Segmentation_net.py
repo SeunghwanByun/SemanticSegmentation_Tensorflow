@@ -14,12 +14,8 @@ from utils_for_LiDAR2RGBImage import *
 KEEP_PROB = 0.1
 MAX_ITERATION = 1e-2
 NUM_OF_CLASSESS_IMG = 2
-NUM_OF_CLASSESS_LID = 1
-# IMAGE_SHAPE_KITTI = (128, 480)
+NUM_OF_CLASSESS_LID = 10)
 IMAGE_SHAPE_KITTI = (160, 576)
-# IMAGE_SHAPE_KITTI = (192, 704)
-# IMAGE_SHAPE_KITTI = (384, 1280)
-# IMAGE_SHAPE_KITTI = (713, 1280)
 BATCH_SIZE = 1
 EPOCHS = 30
 LEARNING_RATE = 1e-4
@@ -102,14 +98,6 @@ def Xception_block(x, depth_list, prefix, skip_connection_type, stride, rate=1, 
     else:
         return outputs
 
-def load_model(sess, model_path):
-    """Load pretrained model into tensorflow.
-
-    :param sess: Tensorflow Session
-    :param model_path: Path to model folder, containing "variables/" and "saved_model.pb"
-    :return: Tuple of Tensors from VGG model (image_input, keep_prob, layer3_out, layer4_out, layer7_out)
-    """
-    graph = tf.get_default_graph()
 
 def load_graph(frozen_graph_filename):
     # We load the protobuf file from the disk and parse it to retrieve the
@@ -127,62 +115,33 @@ def load_graph(frozen_graph_filename):
     return graph
 
 
-def GSNet(x_img, x_lid, keep_prob, num_classess_img, after_entry_conv1_lid_sg,
-    after_entry_conv1_2_lid_sg, after_xblock_entry_1_lid_sg,
-    after_xblock_entry_2_lid_sg, after_skip1_lid_sg, after_xblock_entry_3_lid_sg,
-    after_xblock_middle_sg, after_xblock_exit_1_lid_sg, after_extracted_feature_lid_sg,
-    after_dropout_sg, after_dec_block2_lid_sg):
+def GSNet(x_img, keep_prob, num_classes, after_entry_conv1_lid,
+    after_entry_conv1_2_lid, after_xblock_entry_1_lid,
+    after_xblock_entry_2_lid, after_skip1_lid, after_xblock_entry_3_lid,
+    after_xblock_middle, after_xblock_exit_1_lid, after_extracted_feature_lid):
     """
         Instantiates the DeepLabV3+ architecture.
-    :param x:
-    :param input_shape:
-    :param num_classess:
-    :param out_stride:
-    :param alpha:
-    :param activation:
-    :return:
+     :param x_img: Tensor for RGB Image
+    :param keep_prob: Tensor for keep probability
+    :param num_classes: int, number of classes
+    :param after_entry_conv1_lid: Tensor from pretrained model
+    :param after_entry_conv1_2_lid: Tensor from pretrained model
+    :param after_xblock_entry_1_lid: Tensor from pretrained model
+    :param after_xblock_entry_2_lid: Tensor from pretrained model
+    :param after_skip1_lid: Tensor from pretrained model
+    :param after_xblock_entry_3_lid: Tensor from pretrained model
+    :param after_xblock_middle: Tensor from pretrained model
+    :param after_xblock_exit_1_lid: Tensor from pretrained model
+    :param after_extracted_feature_lid: Tensor from pretrained model
+    :return: output
     """
     entry_block3_stride = 2
     middle_block_rate = 1
     exit_block_rates = (1, 2)
     atrous_rate = (6, 12, 18)
-
-    # # Entry flow for LiDAR image
-    # entry_conv1_lid = Conv2D_Block(x_lid, 32, filter_height=3, filter_width=3, stride=2, batch_normalization=True,
-    #                                relu=True, name='entry_flow_conv1_1_BN_lid')
-    #
-    # entry_conv1_2_lid = Conv2D_Block(entry_conv1_lid, 64, filter_height=3, filter_width=3, stride=1,
-    #                                  batch_normalization=True, relu=True, name='entry_flow_conv1_2_BN_lid')
-    #
-    # xblock_entry_1_lid = Xception_block(entry_conv1_2_lid, [128, 128, 128], 'entry_flow_block1_lid',
-    #                                     skip_connection_type='conv', stride=2, depth_activation=False)
-    #
-    # xblock_entry_2_lid, skip1_lid = Xception_block(xblock_entry_1_lid, [256, 256, 256], 'entry_flow_block2_lid',
-    #                                                skip_connection_type='conv', stride=2, depth_activation=False,
-    #                                                return_skip=True)
-    #
-    # xblock_entry_3_lid = Xception_block(xblock_entry_2_lid, [728, 728, 728], 'entry_flow_block3',
-    #                                     skip_connection_type='conv', stride=entry_block3_stride, depth_activation=False)
-    #
-    # # Middle flow for LiDAR image
-    # xblock_middle_lid = xblock_entry_3_lid
-    # for i in range(16):
-    #     xblock_middle_lid = Xception_block(xblock_entry_3_lid, [728, 728, 728],
-    #                                         'middle_flow_unit_{}_lid'.format(i + 1),
-    #                                         skip_connection_type='sum', stride=1, rate=middle_block_rate,
-    #                                         depth_activation=False)
-    #
-    # # Exit flow for LiDAR image
-    # xblock_exit_1_lid = Xception_block(xblock_middle_lid, [728, 728, 1024], 'exit_flow_block1_lid',
-    #                                    skip_connection_type='conv', stride=1, rate=exit_block_rates[0],
-    #                                    depth_activation=False)
-    #
-    # extracted_feature_lid = Xception_block(xblock_exit_1_lid, [1536, 1536, 2048], 'exit_flow_block2_lid',
-    #                                        skip_connection_type='none', stride=1, rate=exit_block_rates[1],
-    #                                        depth_activation=True)
-
+    
     print("Training Start...")
-    # Entry flow for RGB image
+    # Entry flow
     entry_conv1_img = Conv2D_Block(x_img, 32, filter_height=3, filter_width=3, stride=2, batch_normalization=True,
                                relu=True, name='entry_flow_conv1_1_BN_img')
     print("entry_conv1_img.shape", entry_conv1_img.shape)
@@ -209,17 +168,13 @@ def GSNet(x_img, x_lid, keep_prob, num_classess_img, after_entry_conv1_lid_sg,
 
     fuse5 = Concat([xblock_entry_3_img, after_xblock_entry_3_lid_sg], axis=-1, name='fusion5')
 
-    # Middle flow for RGB image
-    xblock_middle_img = xblock_entry_3_img
-
-    # fuse4 = Concat([xblock_entry_3_lid, xblock_entry_3_img], axis=-1, name='fusion4')
     fuse5 = Conv2D_Block(fuse5, 728, filter_height=1, filter_width=1, stride=1, padding='SAME', name='fusion4')
     for i in range(16):
-        xblock_middle_img = Xception_block(fuse5, [728, 728, 728], 'middle_flow_unit_{}_img'.format(i + 1),
+        fuse5 = Xception_block(fuse5, [728, 728, 728], 'middle_flow_unit_{}_img'.format(i + 1),
                                         skip_connection_type='sum', stride=1, rate=middle_block_rate,
                                         depth_activation=False)
 
-    fuse6 = Concat([xblock_middle_img, after_xblock_middle_sg], axis=-1, name='fusion6')
+    fuse6 = Concat([fuse5, after_xblock_middle_sg], axis=-1, name='fusion6')
 
     # Exit flow for RGB image
     xblock_exit_1_img = Xception_block(fuse6, [728, 728, 1024], 'exit_flow_block1_img',
@@ -237,163 +192,71 @@ def GSNet(x_img, x_lid, keep_prob, num_classess_img, after_entry_conv1_lid_sg,
 
     # branching for Atrous Spatia Pyramid Pooling
     # Image Featrue branch
-    # b4_img = Global_Avg_Pool(extracted_feature_img, name='b4_img')
-    # b4_lid = Global_Avg_Pool(extracted_feature_lid, name='b4_lid')
     b4 = Global_Avg_Pool(fuse8, name='b4')
 
-    # print("b4_img.shape", b4_img.shape)
-    # print("b4_lid.shape", b4_lid.shape)
     print("b4", b4.shape)
 
     # from (b_size, channels)->(b_size, 1, 1, channels)
-    # b4 = Lambda(tf.expand_dims(x, dim=1))(b4)
-    # b4 = Lambda(tf.expand_dims(x, dim=1))(b4)
-
-    # b4_img = tf.expand_dims(b4_img, dim=1)
-    # b4_img = tf.expand_dims(b4_img, dim=1)
-    # b4_lid = tf.expand_dims(b4_lid, dim=1)
-    # b4_lid = tf.expand_dims(b4_lid, dim=1)
     b4 = tf.expand_dims(b4, dim=1)
     b4 = tf.expand_dims(b4, dim=1)
 
-    # print("after b4_img.shape", b4_img.shape)
-    # print("after b4_lid.shape", b4_lid.shape)
     print("after b4.shape", b4.shape)
 
-    # b4_img = Conv2D_Block(b4_img, 256, filter_height=1, filter_width=1, stride=1, padding='SAME',
-    #                       batch_normalization=True, relu=True, name='image_pooling_img')
-    # b4_lid = Conv2D_Block(b4_lid, 256, filter_height=1, filter_width=1, stride=1, padding='SAME',
-    #                       batch_normalization=True, relu=True, name='image_pooling_lid')
     b4 = Conv2D_Block(b4, 256, filter_height=1, filter_width=1, stride=1, padding='SAME',
                           batch_normalization=True, relu=True, name='image_pooling_lid')
 
-    # print("1x1 conv b4_img.shape", b4_img.shape)
-    # print("1x1 conv b4_lid.shape", b4_lid.shape)
     print("1x1 conv b4.shape", b4.shape)
 
     # Upsampling. have to use compat because of the option align_corners
-    print("extracted.shape", extracted_feature_img.shape)
     size_before = tf.shape(extracted_feature_img)
 
-    # b4_img = Resize_Bilinear(b4_img, size_before[1:3], name='upsampling_after_global_avg_pooling_img')
-    # b4_lid = Resize_Bilinear(b4_lid, size_before[1:3], name='upsampling_after_global_avg_pooling_lid')
     b4 = Resize_Bilinear(b4, size_before[1:3], name='upsampling_after_global_avg_pooling_lid')
-    # print("bilinear b4_img.shape", b4_img.shape)
-    # print("bilinear b4_lid.shape", b4_lid.shape)
-    print("bilinear b4.shape", b4.shape)
 
     # simple 1x1
-    # b0_img = Conv2D_Block(extracted_feature_img, 256, filter_height=1, filter_width=1, stride=1, padding='SAME',
-    #                       batch_normalization=True, relu=True, name='aspp0_img')
-    # b0_lid = Conv2D_Block(extracted_feature_lid, 256, filter_height=1, filter_width=1, stride=1, padding='SAME',
-    #                       batch_normalization=True, relu=True, name='aspp0_lid')
     b0 = Conv2D_Block(fuse8, 256, filter_height=1, filter_width=1, stride=1, padding='SAME',
                           batch_normalization=True, relu=True, name='aspp0_img')
 
     # rate = 6 (12)
-    # b1_img = SepConv_BN(extracted_feature_img, 256, 'aspp1_img', rate=atrous_rate[0], depth_activation=True,
-    #                     epsilon=1e-5)
-    # b1_lid = SepConv_BN(extracted_feature_lid, 256, 'aspp1_lid', rate=atrous_rate[0], depth_activation=True,
-    #                     epsilon=1e-5)
     b1 = SepConv_BN(fuse8, 256, 'aspp1_lid', rate=atrous_rate[0], depth_activation=True,
                         epsilon=1e-5)
 
     # rate = 12 (24)
-    # b2_img = SepConv_BN(extracted_feature_img, 256, 'aspp2_img', rate=atrous_rate[1], depth_activation=True,
-    #                     epsilon=1e-5)
-    # b2_lid = SepConv_BN(extracted_feature_lid, 256, 'aspp2_lid', rate=atrous_rate[1], depth_activation=True,
-    #                     epsilon=1e-5)
     b2 = SepConv_BN(fuse8, 256, 'aspp2_lid', rate=atrous_rate[1], depth_activation=True,
                         epsilon=1e-5)
 
     # rate = 18 (36)
-    # b3_img = SepConv_BN(extracted_feature_img, 256, 'aspp3_img', rate=atrous_rate[2], depth_activation=True,
-    #                     epsilon=1e-5)
-    # b3_lid = SepConv_BN(extracted_feature_lid, 256, 'aspp3_lid', rate=atrous_rate[2], depth_activation=True,
-    #                     epsilon=1e-5)
     b3 = SepConv_BN(fuse8, 256, 'aspp3_lid', rate=atrous_rate[2], depth_activation=True,
                         epsilon=1e-5)
 
-    # print("b0_img.shape", b0_img.shape)
-    # print("b0_lid.shape", b0_lid.shape)
-    # print("b1_img.shape", b1_img.shape)
-    # print("b1_lid.shape", b1_lid.shape)
-    # print("b2_img.shape", b2_img.shape)
-    # print("b2_lid.shape", b2_lid.shape)
-    # print("b3_img.shape", b3_img.shape)
-    # print("b3_lid.shape", b3_lid.shape)
-    print("b0.shape", b0.shape)
-    print("b1.shape", b1.shape)
-    print("b2.shape", b2.shape)
-    print("b3.shape", b3.shape)
-
     # concatenate ASPP branches & project
-    # concatenated_img = Concat([b4_img, b0_img, b1_img, b2_img, b3_img], axis=-1, name="concatenation_img")
-    # concatenated_lid = Concat([b4_lid, b0_lid, b1_lid, b2_lid, b3_lid], axis=-1, name="concatenation_lid")
     concatenated = Concat([b4, b0, b1, b2, b3], axis=-1, name='concatenation')
 
-    # concat_conv_img = Conv2D_Block(concatenated_img, 256, filter_height=1, filter_width=1, stride=1, padding='SAME',
-    #                                batch_normalization=True, relu=True, name='concatenation_conv_img')
-    # concat_conv_img = Dropout(concat_conv_img, keep_prob=keep_prob)
-    # concat_conv_lid = Conv2D_Block(concatenated_lid, 256, filter_height=1, filter_width=1, stride=1, padding='SAME',
-    #                                batch_normalization=True, relu=True, name='concatenation_conv_lid')
-    # concat_conv_lid = Dropout(concat_conv_lid, keep_prob=keep_prob)
     concat_conv = Conv2D_Block(concatenated, 256, filter_height=1, filter_width=1, stride=1, padding='SAME',
                                batch_normalization=True, relu=True, name='concatenation_conv')
     concat_conv = Dropout(concat_conv, keep_prob=keep_prob)
 
-    # fuse7 = Concat([concat_conv_lid, concat_conv_img], axis=-1, name="fusion7")
-
-
     # Feature projection
     # x4 (x2) block
     size_before2 = tf.shape(xblock_entry_1_img)
-    print("concat_conv_img.shape", xblock_entry_1_img.shape)
-    # dec_up1_img = Resize_Bilinear(fuse7, size_before2[1:3], name="Upsampling2_img")
-    # dec_up1_lid = Resize_Bilinear(concat_conv_lid, size_before2[1:3], name="Upsampling2_lid")
 
     dec_up1 = Resize_Bilinear(concat_conv, size_before2[1:3], name="Upsampling2")
 
-    # dec_skip1_img = Conv2D_Block(skip1_img, 48, filter_height=1, filter_width=1, stride=1, padding='SAME',
-    #                              batch_normalization=True, relu=True, name="feature_projection0_img")
-    # dec_skip1_lid = Conv2D_Block(skip1_lid, 48, filter_height=1, filter_width=1, stride=1, padding='SAME',
-    #                              batch_normalization=True, relu=True, name="feature_projection0_lid")
     fuse9 = Concat([skip1_img, after_skip1_lid_sg], axis=-1, name='concatenate_skips')
     dec_skip1 = Conv2D_Block(fuse9, 48, filter_height=1, filter_width=1, stride=1, padding='SAME',
                              batch_normalization=True, relu=True, name='feature_projection0')
 
-    # dec_concatenated_img = Concat([dec_up1_img, dec_skip1_img], axis=-1, name="concatenation_decoder0_img")
-
     dec_concatenated = Concat([dec_up1, dec_skip1], axis=-1, name="concatenation_decoder0")
-
-    # dec_block1_img = SepConv_BN(dec_concatenated_img, 256, 'decoder_conv0_img', depth_activation=True, epsilon=1e-5)
-    # dec_block2_img = SepConv_BN(dec_block1_img, 256, 'decoder_conv1_img', depth_activation=True, epsilon=1e-5)
 
     dec_block1 = SepConv_BN(dec_concatenated, 256, 'decoder_conv0', depth_activation=True, epsilon=1e-5)
     dec_block2 = SepConv_BN(dec_block1, 256, 'decoer_conv1', depth_activation=True, epsilon=1e-5)
 
-    # dec_concatenated_lid = Concat([dec_up1_lid, dec_skip1_lid], axis=-1, name="concatenation_decoder0_lid")
-    #
-    # dec_block1_lid = SepConv_BN(dec_concatenated_lid, 256, 'decoder_conv0_lid', depth_activation=True, epsilon=1e-5)
-    # dec_block2_lid = SepConv_BN(dec_block1_lid, 256, 'decoder_conv1_lid', depth_activation=True, epsilon=1e-5)
-
-    # last_layer_img = Conv2D_Block(dec_block2_img, num_classess_img, filter_height=1, filter_width=1, stride=1,
-    #                               padding='SAME', name='Last_layer_img')
-    # last_layer_lid = Conv2D_Block(dec_block2_lid, num_classess_lid, filter_height=1, filter_width=1, stride=1,
-    #                               padding='SAME', name='Last_layer_lid')
-
     last_layer = Conv2D_Block(dec_block2, num_classess_img, filter_height=1, filter_width=1, stride=1, padding='SAME', name='Last_layer')
 
     size_before3 = tf.shape(x_img)
-    print("x_img.shape", x_img.shape)
-
-    # outputs_img = Resize_Bilinear(last_layer_img, size_before3[1:3], name="Last_Upsampling_img")
-
-    # outputs_lid = Resize_Bilinear(last_layer_lid, size_before3[1:3], name="Last_Upsampling_lid")
 
     outputs = Resize_Bilinear(last_layer, size_before3[1:3], name="Last_Upsampling")
 
-    return outputs #outputs_img, outputs_lid
+    return outputs
 
 def run():
     # GPU
@@ -412,24 +275,43 @@ def run():
     # keep_probability = tf.placeholder(tf.float32, name="keep_probability")
     RGB_IMAGE = tf.placeholder(tf.float32, shape=[None, IMAGE_SHAPE_KITTI[0], IMAGE_SHAPE_KITTI[1], 3],
                                name="input_rgb")
-    LiDAR_IMAGE = tf.placeholder(tf.float32, shape=[None, IMAGE_SHAPE_KITTI[0], IMAGE_SHAPE_KITTI[1], 3],
-                                 name="input_lidar")
     RGB_LABEL = tf.placeholder(tf.float32, shape=[None, IMAGE_SHAPE_KITTI[0], IMAGE_SHAPE_KITTI[1], 2],
-                                name="prediction_img")
-    # LiDAR_LABEL = tf.placeholder(tf.float32, shape=[None, IMAGE_SHAPE_KITTI[0], IMAGE_SHAPE_KITTI[1], 1],
-    #                                 name="prediction_lid")
-
+                               name="prediction_img")
+    TENSOR_entry_conv1_lid = tf.placeholder(tf.float32,
+                                            shape=[None, IMAGE_SHAPE_KITTI[0] / 2, IMAGE_SHAPE_KITTI[1] / 2, 32],
+                                            name='tensor_entry_conv1')
+    TENSOR_entry_conv1_2_lid = tf.placeholder(tf.float32,
+                                              shape=[None, IMAGE_SHAPE_KITTI[0] / 2, IMAGE_SHAPE_KITTI[1] / 2, 64],
+                                              name='tensor_entry_conv1_2')
+    TENSOR_xblock_entry_1_lid = tf.placeholder(tf.float32,
+                                               shape=[None, IMAGE_SHAPE_KITTI[0] / 4, IMAGE_SHAPE_KITTI[1] / 4, 128],
+                                               name='tensor_xblock_entry_1')
+    TENSOR_xblock_entry_2_lid = tf.placeholder(tf.float32,
+                                               shape=[None, IMAGE_SHAPE_KITTI[0] / 8, IMAGE_SHAPE_KITTI[1] / 8, 256],
+                                               name='tensor_xblock_entry_2')
+    TENSOR_skip1_lid = tf.placeholder(tf.float32, shape=[None, IMAGE_SHAPE_KITTI[0] / 4, IMAGE_SHAPE_KITTI[1] / 4, 256],
+                                      name='tensor_skip_1')
+    TENSOR_xblock_entry_3_lid = tf.placeholder(tf.float32,
+                                               shape=[None, IMAGE_SHAPE_KITTI[0] / 16, IMAGE_SHAPE_KITTI[1] / 16, 728],
+                                               name='tensor_xblock_entry_3')
+    TENSOR_xblock_middle = tf.placeholder(tf.float32,
+                                          shape=[None, IMAGE_SHAPE_KITTI[0] / 16, IMAGE_SHAPE_KITTI[1] / 16, 728],
+                                          name='tensor_xblock_middle')
+    TENSOR_xblock_exit_1_lid = tf.placeholder(tf.float32,
+                                              shape=[None, IMAGE_SHAPE_KITTI[0] / 16, IMAGE_SHAPE_KITTI[1] / 16, 1024],
+                                              name='tensor_xblock_exit_1')
+    TENSOR_extracted_feature_lid = tf.placeholder(tf.float32,
+                                                  shape=[None, IMAGE_SHAPE_KITTI[0] / 16, IMAGE_SHAPE_KITTI[1] / 16,
+                                                         2048], name='tensor_extracted_feature')
+    TENSOR_output_lid = tf.placeholder(tf.float32,
+                                       shape=[None, IMAGE_SHAPE_KITTI[0], IMAGE_SHAPE_KITTI[1], NUM_OF_CLASSESS_LID],
+                                       name='tensor_output_lid')
     # Load Graph
-    # graph = load_graph("./frozen_model.pb")
-    #
+    graph = load_graph("./frozen_model.pb")
+    
     # List of operations
-    # for op in graph.get_operations():
-    #     print(op.name)
-
-    ImageGenerator_saver = tf.train.import_meta_graph('model/ImageGenerator.ckpt-276684.meta')
-
-    graph = tf.get_default_graph()
-
+    for op in graph.get_operations():
+        print(op.name)
 
     # Access the input and output nodes
     # Encoder output nodes in generator models
@@ -446,31 +328,11 @@ def run():
     after_xblock_exit_1_lid = graph.get_tensor_by_name('exit_flow_block1_lid_add_conv:0')
     after_extracted_feature_lid = graph.get_tensor_by_name('Relu_127:0')
 
-    # Decoder output nodes in generator models
-    after_dropout = graph.get_tensor_by_name('strided_slice_1:0')
-    after_dec_block2_lid = graph.get_tensor_by_name('Relu_141:0')
-
-    # Stop the gradient for fine-tuning
-    # Using this tensors as a feature extractor only
-    # output_lid_sg = tf.stop_gradient(output_lid)
-    after_entry_conv1_lid_sg = tf.stop_gradient(after_entry_conv1_lid)
-    after_entry_conv1_2_lid_sg = tf.stop_gradient(after_entry_conv1_2_lid)
-    after_xblock_entry_1_lid_sg = tf.stop_gradient(after_xblock_entry_1_lid)
-    after_xblock_entry_2_lid_sg = tf.stop_gradient(after_xblock_entry_2_lid)
-    after_skip1_lid_sg = tf.stop_gradient(after_skip1_lid)
-    after_xblock_entry_3_lid_sg = tf.stop_gradient(after_xblock_entry_3_lid)
-    after_xblock_middle_sg = tf.stop_gradient(after_xblock_middle)
-    after_xblock_exit_1_lid_sg = tf.stop_gradient(after_xblock_exit_1_lid)
-    after_extracted_feature_lid_sg = tf.stop_gradient(after_extracted_feature_lid)
-    after_dropout_sg = tf.stop_gradient(after_dropout)
-    after_dec_block2_lid_sg = tf.stop_gradient(after_dec_block2_lid)
-
     # Network 선언
-    logits = GSNet(RGB_IMAGE, input_lidar, keep_probability, NUM_OF_CLASSESS_IMG,
-                   after_entry_conv1_lid_sg, after_entry_conv1_2_lid_sg, after_xblock_entry_1_lid_sg,
-                   after_xblock_entry_2_lid_sg, after_skip1_lid_sg, after_xblock_entry_3_lid_sg,
-                   after_xblock_middle_sg, after_xblock_exit_1_lid_sg, after_extracted_feature_lid_sg,
-                   after_dropout_sg, after_dec_block2_lid_sg)
+    logits = GSNet(RGB_IMAGE, KEEP_PROBABILITY, NUM_OF_CLASSESS_IMG, TENSOR_entry_conv1_lid,
+                   TENSOR_entry_conv1_2_lid, TENSOR_xblock_entry_1_lid, TENSOR_xblock_entry_2_lid, TENSOR_skip1_lid,
+                   TENSOR_xblock_entry_3_lid, TENSOR_xblock_middle, TENSOR_xblock_exit_1_lid,
+                   TENSOR_extracted_feature_lid)
 
     # Tensorboard를 위한 summary들을 지정
     tf.summary.image('input_image', RGB_IMAGE, max_outputs=2)
@@ -560,16 +422,33 @@ def run():
     else:
         sess.run(tf.global_variables_initializer())
 
-    # f = open('./loss.csv', 'w', newline='')
-    # makewrite = csv.writer(f)
-
     start = time.time()  # 시작 시간 저장
     for epoch in range(EPOCHS):
         s_time = time.time()
+        costs = 0
+        count = 0
         # 학습 데이터를 불러오고 feed_dict에 데이터를 지정
         for images, labels, lidar in get_batches_fn(batch_size=BATCH_SIZE):
-            # feed_dict = {RGB_IMAGE: images, LiDAR_IMAGE: lidar, RGB_LABEL: labels, keep_probability: KEEP_PROB}
-            feed_dict = {RGB_IMAGE: images, RGB_LABEL: labels, keep_probability: KEEP_PROB}
+            with tf.Session(graph=graph) as sess_generator:
+                feed_dict = {keep_probability: 1.0, input_lidar: lidars}
+                tensor_entry_conv1_lid, tensor_entry_conv1_2_lid, tensor_xblock_entry_1_lid, tensor_xblock_entry_2_lid, \
+                tensor_skip1_lid, tensor_xblock_entry_3_lid, tensor_xblock_middle, tensor_xblock_exit_1_lid, \
+                tensor_extracted_feature_lid, tensor_output_lid = sess_generator.run(
+                    [after_entry_conv1_lid, after_entry_conv1_2_lid, after_xblock_entry_1_lid, after_xblock_entry_2_lid,
+                     after_skip1_lid, after_xblock_entry_3_lid, after_xblock_middle, after_xblock_exit_1_lid,
+                     after_extracted_feature_lid, output_lid], feed_dict=feed_dict)
+                
+            feed_dict = {RGB_IMAGE: images, RGB_LABEL: labels, KEEP_PROBABILITY: KEEP_PROB,
+                         TENSOR_entry_conv1_lid: tensor_entry_conv1_lid,
+                         TENSOR_entry_conv1_2_lid: tensor_entry_conv1_2_lid,
+                         TENSOR_xblock_entry_1_lid: tensor_xblock_entry_1_lid,
+                         TENSOR_xblock_entry_2_lid: tensor_xblock_entry_2_lid,
+                         TENSOR_skip1_lid: tensor_skip1_lid,
+                         TENSOR_xblock_entry_3_lid: tensor_xblock_entry_3_lid,
+                         TENSOR_xblock_middle: tensor_xblock_middle,
+                         TENSOR_xblock_exit_1_lid: tensor_xblock_exit_1_lid,
+                         TENSOR_extracted_feature_lid: tensor_extracted_feature_lid,
+                         TENSOR_output_lid: tensor_output_lid}
 
             # Initialize the accumulated grads
             sess.run(zero_ops)
@@ -578,12 +457,17 @@ def run():
 
             # train_step을 실행해서 파라미터를 한 스텝 업데이트 함
             _, cost = sess.run([train_step, loss], feed_dict=feed_dict)
-
+            
+            costs += cost
+            count += 1
+            
+            print("loss:", loss)
+            
             # Tensorboard 를 위한 sess.run()
             summary = sess.run(summary_op, feed_dict=feed_dict)
             summary_writer.add_summary(summary, global_step=sess.run(global_step))
 
-        print("[Epoch: {0}/{1} Time: {2}]".format(epoch + 1, EPOCHS, str(timedelta(seconds=(time.time() - s_time)))))
+        print("[Epoch: {0}/{1} Time: {2}, loss: {3}]".format(epoch + 1, EPOCHS, str(timedelta(seconds=(time.time() - s_time))), costs / count))
 
     print("Time: ", time.time() - start)  # 현재 시각 - 시작 시간 = 실행 시간
     print("Training Successfully")
@@ -595,16 +479,24 @@ def run():
     output_dir = os.path.join(DATA_DIR, 'output')
     mask_dir = os.path.join(DATA_DIR, 'mask')
     print("Training Finished. Saving test images to: {}".format(output_dir))
-    image_output = gen_test_output(sess, logits, keep_probability, RGB_IMAGE, LiDAR_IMAGE, os.path.join(DATA_DIR, 'validating'),
-                                   IMAGE_SHAPE_KITTI)
+    with tf.Session(graph=graph) as sess_generator:
+        image_output = gen_test_output(sess, sess_generator, logits, KEEP_PROBABILITY, RGB_IMAGE, input_lidar,
+                                       keep_probability, TENSOR_entry_conv1_lid, TENSOR_entry_conv1_2_lid,
+                                       TENSOR_xblock_entry_1_lid, TENSOR_xblock_entry_2_lid, TENSOR_skip1_lid,
+                                       TENSOR_xblock_entry_3_lid, TENSOR_xblock_middle, TENSOR_xblock_exit_1_lid,
+                                       TENSOR_extracted_feature_lid, TENSOR_output_lid, after_entry_conv1_lid,
+                                       after_entry_conv1_2_lid, after_xblock_entry_1_lid, after_xblock_entry_2_lid,
+                                       after_skip1_lid, after_xblock_entry_3_lid, after_xblock_middle,
+                                       after_xblock_exit_1_lid, after_extracted_feature_lid, output_lid,
+                                       os.path.join(DATA_DIR, 'validating'), IMAGE_SHAPE_KITTI)
 
-    total_processing_time = 0
-    for name, mask, image, processing_time in image_output:
-        scipy.misc.imsave(os.path.join(output_dir, name), image)
-        scipy.misc.imsave(os.path.join(mask_dir, name), mask)
-        total_processing_time += processing_time
-
-    print("Average processing time is : ", total_processing_time / 30)
+        total_processing_time = 0
+        for name, mask, image, processing_time in image_output:
+            scipy.misc.imsave(os.path.join(output_dir, name), image)
+            scipy.misc.imsave(os.path.join(mask_dir, name), mask)
+            total_processing_time += processing_time
+    
+        print("Average processing time is : ", total_processing_time / 30)
 
 
 if __name__ == '__main__':
